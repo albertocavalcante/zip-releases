@@ -4,6 +4,7 @@ on:
     push:
         paths:
             - "binaries.yml"
+            - ".github/workflows/update-workflow-options.yml"
     workflow_dispatch:
 
 jobs:
