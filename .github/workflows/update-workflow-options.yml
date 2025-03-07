@@ -24,7 +24,7 @@ jobs:
                   import pathlib
 
                   # Setup YAML parser to preserve comments and formatting
-                  yaml = ruamel.yaml.RUAMEL_YAML()
+                  yaml = ruamel.yaml.YAML()
                   yaml.preserve_quotes = True
                   yaml.width = 88
 
