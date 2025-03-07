@@ -1,0 +1,64 @@
+name: Update Workflow Options
+
+on:
+    push:
+        paths:
+            - "binaries.yml"
+            - ".github/workflows/update-workflow-options.yml"
+    workflow_dispatch:
+
+jobs:
+    update-workflow:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                token: ${{ secrets.WORKFLOW_TOKEN }}
+
+            - name: Update workflow options using YAML parsing
+              run: |
+                  # Install necessary tools
+                  pip install pyyaml ruamel.yaml
+
+                  python3 <<EOF
+                  import ruamel.yaml
+                  import pathlib
+
+                  # Setup YAML parser to preserve comments and formatting
+                  yaml = ruamel.yaml.YAML()
+                  yaml.preserve_quotes = True
+                  yaml.width = 88
+
+                  # Load binaries.yml to get the options
+                  with open('binaries.yml', 'r') as f:
+                      binaries_config = yaml.load(f)
+
+                  binary_types = list(binaries_config['binaries'].keys())
+
+                  # Load the workflow file
+                  workflow_path = pathlib.Path('.github/workflows/mirror-binaries.yml')
+                  with open(workflow_path, 'r') as f:
+                      workflow = yaml.load(f)
+                      
+                  # Update the options
+                  workflow['on']['workflow_dispatch']['inputs']['binary_type']['options'] = binary_types
+
+                  # Write the updated workflow back
+                  with open(workflow_path, 'w') as f:
+                      yaml.dump(workflow, f)
+                  EOF
+
+                  # Check if there are changes
+                  if git diff --quiet; then
+                    echo "No changes detected in workflow file"
+                    exit 0
+                  fi
+
+                  # Commit and push changes
+                  git config user.name "GitHub Actions Bot"
+                  git config user.email "actions@github.com"
+                  git add .github/workflows/mirror-binaries.yml
+                  git commit -m "Update binary type options [skip ci]"
+                  git push
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
