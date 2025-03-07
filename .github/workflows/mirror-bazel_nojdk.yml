@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       bazel_version:
-        description: 'Bazel version to mirror (e.g., 8.1.1)'
+        description: "Bazel version to mirror (e.g., 8.1.1)"
         required: true
         type: string
       tag_version:
-        description: 'Version for the release tag (e.g., 0.1.0)'
+        description: "Version for the release tag (e.g., 0.1.0)"
         required: false
-        default: '0.1.0'
+        default: "0.1.0"
         type: string
 
 jobs:
@@ -30,70 +30,95 @@ jobs:
           BAZEL_URL="https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel_nojdk-${BAZEL_VERSION}-windows-x86_64.exe"
           BAZEL_PATH="bazel_nojdk-${BAZEL_VERSION}-windows-x86_64.exe"
           echo "Downloading from ${BAZEL_URL}..."
-          
+
           # Check if the URL exists before downloading
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${BAZEL_URL}")
           if [ "${HTTP_STATUS}" != "200" ] && [ "${HTTP_STATUS}" != "302" ]; then
             echo "Error: File does not exist at ${BAZEL_URL} (HTTP status: ${HTTP_STATUS})"
             exit 1
           fi
-          
+
           curl -L -o "${BAZEL_PATH}" "${BAZEL_URL}"
-          
+
           # Compress using maximum compression
           COMPRESSED_PATH="bazel_nojdk-${BAZEL_VERSION}-windows-x86_64.zip"
           echo "Compressing to ${COMPRESSED_PATH}..."
           zip -9 "${COMPRESSED_PATH}" "${BAZEL_PATH}"
-          
+
           # Verify file sizes
           ORIGINAL_SIZE=$(ls -l "${BAZEL_PATH}" | awk '{print $5}')
           COMPRESSED_SIZE=$(ls -l "${COMPRESSED_PATH}" | awk '{print $5}')
           echo "Original size: ${ORIGINAL_SIZE} bytes"
           echo "Compressed size: ${COMPRESSED_SIZE} bytes"
-          
+
           # Set outputs
           echo "compressed_path=${COMPRESSED_PATH}" >> $GITHUB_OUTPUT
           echo "version=${BAZEL_VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Check for existing release
+      - name: Check for existing release and update
         id: check_release
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            try {
-              // Look for a release with the specified tag
-              const tagVersion = '${{ github.event.inputs.tag_version }}';
-              const tagName = `v${tagVersion}`;
+            function generateReleaseBody(version, dateString, existingVersions = []) {
+              const header = [
+                '# Zip Assets of Binaries',
+                '',
+                'This repository provides Windows executables as ZIP files.',
+                '',
+                '## Available versions:'
+              ].join('\n');
               
+              const newVersion = `- ${version} (bazel_nojdk-${version}-windows-x86_64.zip, added on ${dateString})`;
+              
+              return [
+                header,
+                newVersion,
+                ...existingVersions
+              ].join('\n');
+            }
+
+            const tagVersion = '${{ github.event.inputs.tag_version }}';
+            const tagName = `v${tagVersion}`;
+            const version = "${{ steps.download.outputs.version }}";
+            const dateString = new Date().toISOString().split('T')[0];
+            let releaseId;
+            let uploadUrl;
+            let releaseExists = false;
+
+            try {
               const release = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag: tagName
               });
               
-              core.setOutput('release_id', release.data.id);
-              core.setOutput('release_exists', 'true');
-              core.setOutput('upload_url', release.data.upload_url);
-              core.setOutput('body', release.data.body);
-              return release.data;
+              releaseId = release.data.id;
+              uploadUrl = release.data.upload_url;
+              releaseExists = true;
+              
+              // Get existing versions from current body, excluding current version
+              const existingVersions = (release.data.body || '')
+                .split('\n')
+                .filter(line => line.startsWith('- '))
+                .filter(line => !line.includes(`${version} (`));
+              
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                body: generateReleaseBody(version, dateString, existingVersions)
+              });
             } catch (error) {
-              core.setOutput('release_exists', 'false');
-              return null;
+              console.log(`Release with tag ${tagName} not found. Will create it.`);
+              releaseExists = false;
             }
 
-      - name: Create tag if it doesn't exist
-        if: steps.check_release.outputs.release_exists != 'true'
-        run: |
-          TAG_VERSION="${{ github.event.inputs.tag_version }}"
-          TAG_NAME="v${TAG_VERSION}"
-          
-          # Try to create the tag pointing to the current commit
-          git tag ${TAG_NAME}
-          git push origin ${TAG_NAME}
-          
-          # If the tag already exists remotely but not locally, this won't fail the workflow
-          exit 0
+            core.setOutput('release_id', releaseId);
+            core.setOutput('release_exists', releaseExists.toString());
+            core.setOutput('upload_url', uploadUrl);
+            return { releaseId, releaseExists, uploadUrl };
 
       - name: Create release if it doesn't exist
         id: create_release
@@ -102,16 +127,18 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const version = "${{ steps.download.outputs.version }}";
+            const tagVersion = '${{ github.event.inputs.tag_version }}';
+            const tagName = `v${tagVersion}`;
+            const dateString = new Date().toISOString().split('T')[0];
+
             try {
-              const tagVersion = '${{ github.event.inputs.tag_version }}';
-              const tagName = `v${tagVersion}`;
-              
               const release = await github.rest.repos.createRelease({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag_name: tagName,
                 name: 'Zip Assets',
-                body: 'Collection of compressed Bazel NoJDK executables for Windows\n\n## Available versions:',
+                body: generateReleaseBody(version, dateString),
                 draft: false,
                 prerelease: false,
                 generate_release_notes: false
@@ -119,7 +146,6 @@ jobs:
               
               core.setOutput('release_id', release.data.id);
               core.setOutput('upload_url', release.data.upload_url);
-              core.setOutput('body', release.data.body);
               return release.data;
             } catch (error) {
               console.log(error);
@@ -134,19 +160,19 @@ jobs:
           script: |
             const assetName = 'bazel_nojdk-${{ steps.download.outputs.version }}-windows-x86_64.zip';
             const releaseId = ${{ steps.check_release.outputs.release_id || steps.create_release.outputs.release_id }};
-            
+
             if (!releaseId) {
               console.log('No release ID found, skipping asset deletion');
               return;
             }
-            
+
             const assets = await github.rest.repos.listReleaseAssets({
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: releaseId,
               per_page: 100
             });
-            
+
             for (const asset of assets.data) {
               if (asset.name === assetName) {
                 console.log(`Deleting existing asset: ${assetName}`);
@@ -159,45 +185,29 @@ jobs:
             }
 
       - name: Upload asset to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.check_release.outputs.upload_url || steps.create_release.outputs.upload_url }}
-          asset_path: ${{ steps.download.outputs.compressed_path }}
-          asset_name: ${{ steps.download.outputs.compressed_path }}
-          asset_content_type: application/zip
-
-      - name: Update release body
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const releaseId = ${{ steps.check_release.outputs.release_id || steps.create_release.outputs.release_id }};
-            
-            if (!releaseId) {
-              console.log('No release ID found, skipping body update');
-              return;
-            }
-            
-            const version = '${{ steps.download.outputs.version }}';
-            let body = '${{ steps.check_release.outputs.body || steps.create_release.outputs.body }}';
-            
-            // Get the current date in YYYY-MM-DD format
-            const now = new Date();
-            const dateString = now.toISOString().split('T')[0];
-            
-            if (!body.includes(`- ${version}`)) {
-              if (body.includes('## Available versions:')) {
-                body = body.replace('## Available versions:', `## Available versions:\n- ${version} (added on ${dateString})`);
-              } else {
-                body = `${body}\n\n## Available versions:\n- ${version} (added on ${dateString})`;
-              }
-              
-              await github.rest.repos.updateRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: releaseId,
-                body: body
-              });
-            }
+            const fs = require('fs');
+            const { repo } = context;
+            const uploadUrl = '${{ steps.check_release.outputs.upload_url || steps.create_release.outputs.upload_url }}';
+            const assetPath = '${{ steps.download.outputs.compressed_path }}';
+            const assetName = '${{ steps.download.outputs.compressed_path }}';
+
+            const contentLength = fs.statSync(assetPath).size;
+            const contentType = 'application/zip';
+            const headers = { 
+              'content-type': contentType,
+              'content-length': contentLength
+            };
+
+            const data = fs.readFileSync(assetPath);
+            const uploadResponse = await github.rest.repos.uploadReleaseAsset({
+              url: uploadUrl,
+              headers,
+              name: assetName,
+              data
+            });
+
+            console.log(`Asset uploaded successfully: ${uploadResponse.data.browser_download_url}`);
