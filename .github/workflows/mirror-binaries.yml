@@ -7,7 +7,7 @@ on:
                 description: "Binary to mirror"
                 required: true
                 type: choice
-                options: ${{ fromJson(vars[format('BINARY_TYPES_{0}', github.ref_name)]) }}
+                options: ${{ fromJson(github.vars[format('BINARY_TYPES_{0}', github.ref_name)]) }}
             version:
                 description: "Version to mirror (e.g., 8.1.1 or v2.14.0)"
                 required: true
