@@ -17,9 +17,24 @@ on:
                 required: false
                 default: "0.1.0"
                 type: string
+    push:
+        paths:
+            - '.github/workflows/mirror-binaries.yml'
+            - 'binaries.yml'
 
 jobs:
+    prompt-for-input:
+        if: github.event_name == 'push'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Trigger workflow_dispatch
+              run: |
+                  echo "Changes detected!"
+                  echo "Please manually run the workflow with your desired inputs"
+                  echo "No automatic updates will be performed"
+
     mirror-binary:
+        if: github.event_name == 'workflow_dispatch'
         runs-on: ubuntu-latest
         permissions:
             contents: write
