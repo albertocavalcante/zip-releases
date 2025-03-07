@@ -1,0 +1,12 @@
+binaries:
+  bazel_nojdk:
+    title: Bazel NoJDK
+    url_template: https://github.com/bazelbuild/bazel/releases/download/{version}/bazel_nojdk-{version}-windows-x86_64.exe
+    filename_template: bazel_nojdk-{version}-windows-x86_64.exe
+    compressed_name_template: bazel_nojdk-{version}-windows-x86_64.zip
+
+  copy_directory:
+    title: "bazel-lib: Copy Directory"
+    url_template: https://github.com/bazel-contrib/bazel-lib/releases/download/{version}/copy_directory-windows_amd64.exe
+    filename_template: copy_directory-windows_amd64.exe
+    compressed_name_template: copy_directory-{clean_version}-windows-x86_64.zip

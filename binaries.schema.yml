@@ -1,0 +1,22 @@
+# Schema for binary configurations
+type: object
+properties:
+  binaries:
+    type: object
+    patternProperties:
+      ^[a-zA-Z_][a-zA-Z0-9_]*$:
+        type: object
+        required: [title, url_template, filename_template, compressed_name_template]
+        properties:
+          title:
+            type: string
+            description: Display name of the binary
+          url_template:
+            type: string
+            description: Template for download URL with {version} placeholder
+          filename_template:
+            type: string
+            description: Template for binary filename with {version} placeholder
+          compressed_name_template:
+            type: string
+            description: Template for compressed filename with {version} placeholder 
