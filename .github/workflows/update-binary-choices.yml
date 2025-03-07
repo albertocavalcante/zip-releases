@@ -4,13 +4,9 @@ on:
     push:
         paths:
             - "binaries.yml"
-        branches:
-            - "main"
     pull_request:
         paths:
             - "binaries.yml"
-        branches:
-            - "main"
     workflow_dispatch:
 
 jobs:
@@ -25,8 +21,6 @@ jobs:
               run: |
                   BRANCH=${GITHUB_REF#refs/heads/}
                   TYPES=$(yq -o=json '.binaries | keys' binaries.yml)
-                  gh api -X PUT "/repos/${{ github.repository }}/environments/${BRANCH}/variables/BINARY_TYPES" \
-                    -f "name=BINARY_TYPES" \
-                    -f "value=$TYPES"
+                  gh variable set BINARY_TYPES_${BRANCH} --body "$TYPES"
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
