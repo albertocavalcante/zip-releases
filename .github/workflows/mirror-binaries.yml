@@ -170,7 +170,7 @@ jobs:
                       const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
                       const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
                       const releaseId = '${{ steps.check_release.outputs.release_id }}';
-
+                      
                       if (releaseId) {
                         try {
                           // List all assets for the release
@@ -179,31 +179,45 @@ jobs:
                             repo: context.repo.repo,
                             release_id: releaseId
                           });
-
-                          // Find the asset with the matching name
-                          const asset = assets.data.find(asset => asset.name === config.compressed);
                           
-                          if (asset) {
-                            console.log(`Found existing asset: ${asset.name} (ID: ${asset.id})`);
-                            
-                            // Delete the existing asset
+                          console.log(`Found ${assets.data.length} assets on the release:`);
+                          assets.data.forEach(asset => {
+                            console.log(`- ${asset.name} (ID: ${asset.id})`);
+                          });
+                          
+                          // 1. Delete the compressed file if it exists
+                          const zipAsset = assets.data.find(asset => asset.name === config.compressed);
+                          if (zipAsset) {
+                            console.log(`Found existing ZIP asset: ${zipAsset.name} (ID: ${zipAsset.id})`);
+                            await github.rest.repos.deleteReleaseAsset({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              asset_id: zipAsset.id
+                            });
+                            console.log(`Deleted ZIP asset: ${zipAsset.name}`);
+                          }
+                          
+                          // 2. Delete any .exe files (we don't want them in the release)
+                          const exeAssets = assets.data.filter(asset => asset.name.endsWith('.exe'));
+                          for (const asset of exeAssets) {
+                            console.log(`Found EXE asset to delete: ${asset.name} (ID: ${asset.id})`);
                             await github.rest.repos.deleteReleaseAsset({
                               owner: context.repo.owner,
                               repo: context.repo.repo,
                               asset_id: asset.id
                             });
-                            console.log(`Deleted asset: ${asset.name}`);
-                          } else {
-                            console.log(`No existing asset found with name: ${config.compressed}`);
+                            console.log(`Deleted EXE asset: ${asset.name}`);
                           }
+                          
                         } catch (error) {
                           console.error(`Error handling assets: ${error.message}`);
+                          console.error(error.stack);
                         }
                       } else {
                         console.log('Release ID not found, skipping asset deletion');
                       }
 
-            - name: Upload asset to release
+            - name: Upload ZIP asset to release
               if: github.ref == 'refs/heads/main'
               uses: actions/github-script@v7
               with:
@@ -215,14 +229,24 @@ jobs:
                       const releaseId = '${{ steps.check_release.outputs.release_id }}';
 
                       if (releaseId) {
-                        await github.rest.repos.uploadReleaseAsset({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          release_id: releaseId,
-                          name: config.filename,
-                          data: Buffer.from(fs.readFileSync(config.compressed)),
-                          headers: {
-                            'Content-Type': 'application/zip'
-                          }
-                        });
+                        try {
+                          // Only upload the ZIP file with its correct name
+                          console.log(`Uploading ZIP file: ${config.compressed}`);
+                          await github.rest.repos.uploadReleaseAsset({
+                            owner: context.repo.owner,
+                            repo: context.repo.repo,
+                            release_id: releaseId,
+                            name: config.compressed,
+                            data: fs.readFileSync(config.compressed),
+                            headers: {
+                              'Content-Type': 'application/zip'
+                            }
+                          });
+                          console.log(`Successfully uploaded ${config.compressed}`);
+                        } catch (error) {
+                          console.error(`Error uploading asset: ${error.message}`);
+                          throw error;
+                        }
+                      } else {
+                        console.error("No release ID found. Cannot upload asset.");
                       }
