@@ -172,12 +172,35 @@ jobs:
                       const releaseId = '${{ steps.check_release.outputs.release_id }}';
 
                       if (releaseId) {
-                        await github.rest.repos.deleteReleaseAsset({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          release_id: releaseId,
-                          asset_id: config.asset_id
-                        });
+                        try {
+                          // List all assets for the release
+                          const assets = await github.rest.repos.listReleaseAssets({
+                            owner: context.repo.owner,
+                            repo: context.repo.repo,
+                            release_id: releaseId
+                          });
+
+                          // Find the asset with the matching name
+                          const asset = assets.data.find(asset => asset.name === config.compressed);
+                          
+                          if (asset) {
+                            console.log(`Found existing asset: ${asset.name} (ID: ${asset.id})`);
+                            
+                            // Delete the existing asset
+                            await github.rest.repos.deleteReleaseAsset({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              asset_id: asset.id
+                            });
+                            console.log(`Deleted asset: ${asset.name}`);
+                          } else {
+                            console.log(`No existing asset found with name: ${config.compressed}`);
+                          }
+                        } catch (error) {
+                          console.error(`Error handling assets: ${error.message}`);
+                        }
+                      } else {
+                        console.log('Release ID not found, skipping asset deletion');
                       }
 
             - name: Upload asset to release
