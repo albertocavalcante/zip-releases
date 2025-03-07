@@ -1,22 +1,32 @@
 name: Update Binary Choices
 
 on:
-  push:
-    paths:
-      - 'binaries.yml'
-  workflow_dispatch:  # Allow manual trigger
+    push:
+        paths:
+            - "binaries.yml"
+        branches:
+            - "main"
+    pull_request:
+        paths:
+            - "binaries.yml"
+        branches:
+            - "main"
+    workflow_dispatch:
 
 jobs:
-  update-choices:
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write  # Needed to update Variables
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Update BINARY_TYPES variable
-        run: |
-          TYPES=$(yq -o=json '.binaries | keys' binaries.yml)
-          gh variable set BINARY_TYPES "$TYPES" --body "Available binary types"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    update-choices:
+        runs-on: ubuntu-latest
+        permissions:
+            actions: write
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Update BINARY_TYPES variable
+              run: |
+                  BRANCH=${GITHUB_REF#refs/heads/}
+                  TYPES=$(yq -o=json '.binaries | keys' binaries.yml)
+                  gh api -X PUT "/repos/${{ github.repository }}/environments/${BRANCH}/variables/BINARY_TYPES" \
+                    -f "name=BINARY_TYPES" \
+                    -f "value=$TYPES"
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
