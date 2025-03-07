@@ -14,19 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Update binary choices
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const yaml = require('js-yaml');
-            const fs = require('fs');
-            
-            const config = yaml.load(fs.readFileSync('binaries.yml', 'utf8'));
-            const binaryTypes = Object.keys(config.binaries);
-            
-            await github.rest.actions.updateRepoVariable({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'BINARY_TYPES',
-              value: JSON.stringify(binaryTypes)
-            }); 
+      - name: Update BINARY_TYPES variable
+        run: |
+          TYPES=$(yq -o=json '.binaries | keys' binaries.yml)
+          gh variable set BINARY_TYPES "$TYPES" --body "Available binary types"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
