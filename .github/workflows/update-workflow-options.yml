@@ -10,11 +10,10 @@ on:
 jobs:
     update-workflow:
         runs-on: ubuntu-latest
-        permissions:
-            contents: write
-            actions: write
         steps:
             - uses: actions/checkout@v4
+              with:
+                token: ${{ secrets.WORKFLOW_TOKEN }}
 
             - name: Update workflow options using YAML parsing
               run: |
