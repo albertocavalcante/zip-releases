@@ -19,6 +19,11 @@ jobs:
 
             - name: Update BINARY_TYPES variable
               run: |
+                  if [[ $GITHUB_REF == refs/pull/* ]]; then
+                    echo "Skipping variable update for pull request"
+                    exit 0
+                  fi
+                  
                   BRANCH=${GITHUB_REF#refs/heads/}
                   TYPES=$(yq -o=json '.binaries | keys' binaries.yml)
                   gh variable set BINARY_TYPES_${BRANCH} --body "$TYPES"
