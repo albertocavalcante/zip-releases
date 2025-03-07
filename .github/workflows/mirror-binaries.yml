@@ -1,91 +1,91 @@
 name: Mirror Binary Assets
 
 on:
-  workflow_dispatch:
-    inputs:
-      binary_type:
-        description: "Binary to mirror"
-        required: true
-        type: choice
-        options: ${{ fromJson(vars.BINARY_TYPES) }}
-      version:
-        description: "Version to mirror (e.g., 8.1.1 or v2.14.0)"
-        required: true
-        type: string
-      tag_version:
-        description: "Version for the release tag (e.g., 0.1.0)"
-        required: false
-        default: "0.1.0"
-        type: string
+    workflow_dispatch:
+        inputs:
+            binary_type:
+                description: "Binary to mirror"
+                required: true
+                type: choice
+                options: ${{ fromJson(vars.BINARY_TYPES) }}
+            version:
+                description: "Version to mirror (e.g., 8.1.1 or v2.14.0)"
+                required: true
+                type: string
+            tag_version:
+                description: "Version for the release tag (e.g., 0.1.0)"
+                required: false
+                default: "0.1.0"
+                type: string
 
 jobs:
-  mirror-binary:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    mirror-binary:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
 
-      - name: Set binary config
-        id: config
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
-            const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
-            Object.entries(config).forEach(([key, value]) => {
-              core.setOutput(key, value);
-            });
+            - name: Set binary config
+              id: config
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
+                      const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
+                      Object.entries(config).forEach(([key, value]) => {
+                        core.setOutput(key, value);
+                      });
 
-      - name: Download and compress binary
-        id: download
-        run: |
-          curl -L "${{ steps.config.outputs.url }}" -o "${{ steps.config.outputs.filename }}"
-          zip -9 "${{ steps.config.outputs.compressed }}" "${{ steps.config.outputs.filename }}"
-          echo "compressed_path=${{ steps.config.outputs.compressed }}" >> $GITHUB_OUTPUT
+            - name: Download and compress binary
+              id: download
+              run: |
+                  curl -L "${{ steps.config.outputs.url }}" -o "${{ steps.config.outputs.filename }}"
+                  zip -9 "${{ steps.config.outputs.compressed }}" "${{ steps.config.outputs.filename }}"
+                  echo "compressed_path=${{ steps.config.outputs.compressed }}" >> $GITHUB_OUTPUT
 
-      - name: Check for existing release and update
-        id: check_release
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { generateReleaseBody } = require('./.github/workflows/scripts/release-utils.js');
-            const tagName = `v${{ github.event.inputs.tag_version }}`;
-            const dateString = new Date().toISOString().split('T')[0];
-            let releaseId, uploadUrl, releaseExists = false;
+            - name: Check for existing release and update
+              id: check_release
+              uses: actions/github-script@v7
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const { generateReleaseBody } = require('./.github/workflows/scripts/release-utils.js');
+                      const tagName = `v${{ github.event.inputs.tag_version }}`;
+                      const dateString = new Date().toISOString().split('T')[0];
+                      let releaseId, uploadUrl, releaseExists = false;
 
-            try {
-              const release = await github.rest.repos.getReleaseByTag({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag: tagName
-              });
-              
-              releaseId = release.data.id;
-              uploadUrl = release.data.upload_url;
-              releaseExists = true;
-              
-              const existingVersions = (release.data.body || '')
-                .split('\n')
-                .filter(line => line.startsWith('- '));
-              
-              await github.rest.repos.updateRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: releaseId,
-                body: generateReleaseBody(
-                  '${{ github.event.inputs.binary_type }}',
-                  '${{ github.event.inputs.version }}',
-                  dateString,
-                  existingVersions
-                )
-              });
-            } catch (error) {
-              console.log(`Release with tag ${tagName} not found. Will create it.`);
-            }
-            
-            core.setOutput('release_id', releaseId);
-            core.setOutput('release_exists', releaseExists.toString());
-            core.setOutput('upload_url', uploadUrl);
+                      try {
+                        const release = await github.rest.repos.getReleaseByTag({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          tag: tagName
+                        });
+                        
+                        releaseId = release.data.id;
+                        uploadUrl = release.data.upload_url;
+                        releaseExists = true;
+                        
+                        const existingVersions = (release.data.body || '')
+                          .split('\n')
+                          .filter(line => line.startsWith('- '));
+                        
+                        await github.rest.repos.updateRelease({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          release_id: releaseId,
+                          body: generateReleaseBody(
+                            '${{ github.event.inputs.binary_type }}',
+                            '${{ github.event.inputs.version }}',
+                            dateString,
+                            existingVersions
+                          )
+                        });
+                      } catch (error) {
+                        console.log(`Release with tag ${tagName} not found. Will create it.`);
+                      }
+
+                      core.setOutput('release_id', releaseId);
+                      core.setOutput('release_exists', releaseExists.toString());
+                      core.setOutput('upload_url', uploadUrl);
