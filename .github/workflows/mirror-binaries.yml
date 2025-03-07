@@ -250,3 +250,40 @@ jobs:
                       } else {
                         console.error("No release ID found. Cannot upload asset.");
                       }
+
+            - name: Update release description
+              if: github.ref == 'refs/heads/main'
+              uses: actions/github-script@v7
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const { generateEnhancedReleaseDescription } = require('./.github/workflows/scripts/release-utils.js');
+                      const releaseId = '${{ steps.check_release.outputs.release_id }}';
+                      
+                      if (releaseId) {
+                        try {
+                          // Get current assets in the release
+                          const { data: assets } = await github.rest.repos.listReleaseAssets({
+                            owner: context.repo.owner,
+                            repo: context.repo.repo,
+                            release_id: releaseId
+                          });
+                          
+                          // Generate enhanced description using external function
+                          const releaseBody = generateEnhancedReleaseDescription(assets);
+                          
+                          // Update the release
+                          await github.rest.repos.updateRelease({
+                            owner: context.repo.owner,
+                            repo: context.repo.repo,
+                            release_id: releaseId,
+                            body: releaseBody
+                          });
+                          
+                          console.log('Updated release description with enhanced formatting');
+                        } catch (error) {
+                          console.error(`Error updating release description: ${error.message}`);
+                        }
+                      } else {
+                        console.log('No release ID found, skipping description update');
+                      }
