@@ -1,289 +1,291 @@
 name: Mirror Binary Assets
 
 on:
-    workflow_dispatch:
-        inputs:
-            binary_type:
-                description: "Binary to mirror"
-                required: true
-                type: choice
-                options:
-                    - bazel_nojdk
-                    - copy_directory
-            version:
-                description: "Version to mirror (e.g., 8.1.1 or v2.14.0)"
-                required: true
-                type: string
-            tag_version:
-                description: "Version for the release tag (e.g., 0.1.0)"
-                required: false
-                default: "0.1.0"
-                type: string
-    push:
-        paths:
-            - ".github/workflows/mirror-binaries.yml"
-            - "binaries.yml"
+  workflow_dispatch:
+    inputs:
+      binary_type:
+        description: "Binary to mirror"
+        required: true
+        type: choice
+        options:
+        - bazel_nojdk
+        - bazelisk
+        - copy_directory
+      version:
+        description: "Version to mirror (e.g., 8.1.1 or v2.14.0)"
+        required: true
+        type: string
+      tag_version:
+        description: "Version for the release tag (e.g., 0.1.0)"
+        required: false
+        default: "0.1.0"
+        type: string
+  push:
+    paths:
+    - ".github/workflows/mirror-binaries.yml"
+    - "binaries.yml"
 
 jobs:
-    prompt-for-input:
-        if: github.event_name == 'push'
-        runs-on: ubuntu-latest
-        steps:
-            - name: Trigger workflow_dispatch
-              run: |
-                  echo "Changes detected!"
-                  echo "Please manually run the workflow with your desired inputs"
-                  echo "No automatic updates will be performed"
+  prompt-for-input:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Trigger workflow_dispatch
+      run: |
+        echo "Changes detected!"
+        echo "Please manually run the workflow with your desired inputs"
+        echo "No automatic updates will be performed"
 
-    mirror-binary:
-        if: github.event_name == 'workflow_dispatch'
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  mirror-binary:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-            - name: Install dependencies
-              run: npm install js-yaml
+    - name: Install dependencies
+      run: npm install js-yaml
 
-            - name: Set binary config
-              id: config
-              uses: actions/github-script@v7
-              with:
-                  script: |
-                      const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
-                      const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
-                      Object.entries(config).forEach(([key, value]) => {
-                        core.setOutput(key, value);
-                      });
+    - name: Set binary config
+      id: config
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
+          const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
+          Object.entries(config).forEach(([key, value]) => {
+            core.setOutput(key, value);
+          });
 
-            - name: Download and compress binary
-              id: download
-              run: |
-                  curl -L "${{ steps.config.outputs.url }}" -o "${{ steps.config.outputs.filename }}"
-                  zip -9 "${{ steps.config.outputs.compressed }}" "${{ steps.config.outputs.filename }}"
-                  echo "compressed_path=${{ steps.config.outputs.compressed }}" >> $GITHUB_OUTPUT
+    - name: Download and compress binary
+      id: download
+      run: |
+        curl -L "${{ steps.config.outputs.url }}" -o "${{ steps.config.outputs.filename }}"
+        zip -9 "${{ steps.config.outputs.compressed }}" "${{ steps.config.outputs.filename }}"
+        echo "compressed_path=${{ steps.config.outputs.compressed }}" >> $GITHUB_OUTPUT
 
-            - name: Check for existing release and update
-              if: github.ref == 'refs/heads/main'
-              id: check_release
-              uses: actions/github-script@v7
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  script: |
-                      console.log('Running on main branch, proceeding with release operations...');
-                      const { generateReleaseBody } = require('./.github/workflows/scripts/release-utils.js');
-                      const tagName = `v${{ github.event.inputs.tag_version }}`;
-                      const dateString = new Date().toISOString().split('T')[0];
-                      let releaseId, uploadUrl, releaseExists = false;
+    - name: Check for existing release and update
+      if: github.ref == 'refs/heads/main'
+      id: check_release
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          console.log('Running on main branch, proceeding with release operations...');
+          const { generateReleaseBody } = require('./.github/workflows/scripts/release-utils.js');
+          const tagName = `v${{ github.event.inputs.tag_version }}`;
+          const dateString = new Date().toISOString().split('T')[0];
+          let releaseId, uploadUrl, releaseExists = false;
 
-                      try {
-                        const release = await github.rest.repos.getReleaseByTag({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          tag: tagName
-                        });
-                        
-                        releaseId = release.data.id;
-                        uploadUrl = release.data.upload_url;
-                        releaseExists = true;
-                        
-                        const existingVersions = (release.data.body || '')
-                          .split('\n')
-                          .filter(line => line.startsWith('- '));
-                        
-                        await github.rest.repos.updateRelease({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          release_id: releaseId,
-                          body: generateReleaseBody(
-                            '${{ github.event.inputs.binary_type }}',
-                            '${{ github.event.inputs.version }}',
-                            dateString,
-                            existingVersions
-                          )
-                        });
-                      } catch (error) {
-                        console.log(`Release with tag ${tagName} not found. Will create it.`);
-                      }
+          try {
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: tagName
+            });
+            
+            releaseId = release.data.id;
+            uploadUrl = release.data.upload_url;
+            releaseExists = true;
+            
+            const existingVersions = (release.data.body || '')
+              .split('\n')
+              .filter(line => line.startsWith('- '));
+            
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              body: generateReleaseBody(
+                '${{ github.event.inputs.binary_type }}',
+                '${{ github.event.inputs.version }}',
+                dateString,
+                existingVersions
+              )
+            });
+          } catch (error) {
+            console.log(`Release with tag ${tagName} not found. Will create it.`);
+          }
 
-                      core.setOutput('release_id', releaseId);
-                      core.setOutput('release_exists', releaseExists.toString());
-                      core.setOutput('upload_url', uploadUrl);
+          core.setOutput('release_id', releaseId);
+          core.setOutput('release_exists', releaseExists.toString());
+          core.setOutput('upload_url', uploadUrl);
 
-            - name: Skip release operations
-              if: github.ref != 'refs/heads/main'
-              run: |
-                  echo "Not on main branch (current: ${GITHUB_REF#refs/heads/}), skipping release operations"
-                  echo "This is expected behavior for non-main branches"
+    - name: Skip release operations
+      if: github.ref != 'refs/heads/main'
+      run: |
+        echo "Not on main branch (current: ${GITHUB_REF#refs/heads/}), skipping release operations"
+        echo "This is expected behavior for non-main branches"
 
-            - name: Create release if it doesn't exist
-              if: github.ref == 'refs/heads/main' && steps.check_release.outputs.release_exists != 'true'
-              id: create_release
-              uses: actions/github-script@v7
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  script: |
-                      const { generateReleaseBody } = require('./.github/workflows/scripts/release-utils.js');
-                      const tagName = `v${{ github.event.inputs.tag_version }}`;
-                      const dateString = new Date().toISOString().split('T')[0];
-                      let releaseId, uploadUrl;
+    - name: Create release if it doesn't exist
+      if: github.ref == 'refs/heads/main' && steps.check_release.outputs.release_exists !=
+        'true'
+      id: create_release
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { generateReleaseBody } = require('./.github/workflows/scripts/release-utils.js');
+          const tagName = `v${{ github.event.inputs.tag_version }}`;
+          const dateString = new Date().toISOString().split('T')[0];
+          let releaseId, uploadUrl;
 
-                      try {
-                        const release = await github.rest.repos.getReleaseByTag({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          tag: tagName
-                        });
-                        
-                        releaseId = release.data.id;
-                        uploadUrl = release.data.upload_url;
-                      } catch (error) {
-                        console.log(`Release with tag ${tagName} not found. Will create it.`);
-                      }
+          try {
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: tagName
+            });
+            
+            releaseId = release.data.id;
+            uploadUrl = release.data.upload_url;
+          } catch (error) {
+            console.log(`Release with tag ${tagName} not found. Will create it.`);
+          }
 
-                      await github.rest.repos.createRelease({
-                        owner: context.repo.owner,
-                        repo: context.repo.repo,
-                        tag_name: tagName,
-                        name: tagName,
-                        body: generateReleaseBody(
-                          '${{ github.event.inputs.binary_type }}',
-                          '${{ github.event.inputs.version }}',
-                          dateString,
-                          []
-                        )
-                      });
+          await github.rest.repos.createRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            tag_name: tagName,
+            name: tagName,
+            body: generateReleaseBody(
+              '${{ github.event.inputs.binary_type }}',
+              '${{ github.event.inputs.version }}',
+              dateString,
+              []
+            )
+          });
 
-                      core.setOutput('release_id', releaseId);
-                      core.setOutput('release_exists', 'false');
-                      core.setOutput('upload_url', uploadUrl);
+          core.setOutput('release_id', releaseId);
+          core.setOutput('release_exists', 'false');
+          core.setOutput('upload_url', uploadUrl);
 
-            - name: Delete existing asset if it exists
-              if: github.ref == 'refs/heads/main'
-              uses: actions/github-script@v7
-              continue-on-error: true
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  script: |
-                      const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
-                      const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
-                      const releaseId = '${{ steps.check_release.outputs.release_id }}';
-                      
-                      if (releaseId) {
-                        try {
-                          // List all assets for the release
-                          const assets = await github.rest.repos.listReleaseAssets({
-                            owner: context.repo.owner,
-                            repo: context.repo.repo,
-                            release_id: releaseId
-                          });
-                          
-                          console.log(`Found ${assets.data.length} assets on the release:`);
-                          assets.data.forEach(asset => {
-                            console.log(`- ${asset.name} (ID: ${asset.id})`);
-                          });
-                          
-                          // 1. Delete the compressed file if it exists
-                          const zipAsset = assets.data.find(asset => asset.name === config.compressed);
-                          if (zipAsset) {
-                            console.log(`Found existing ZIP asset: ${zipAsset.name} (ID: ${zipAsset.id})`);
-                            await github.rest.repos.deleteReleaseAsset({
-                              owner: context.repo.owner,
-                              repo: context.repo.repo,
-                              asset_id: zipAsset.id
-                            });
-                            console.log(`Deleted ZIP asset: ${zipAsset.name}`);
-                          }
-                          
-                          // 2. Delete any .exe files (we don't want them in the release)
-                          const exeAssets = assets.data.filter(asset => asset.name.endsWith('.exe'));
-                          for (const asset of exeAssets) {
-                            console.log(`Found EXE asset to delete: ${asset.name} (ID: ${asset.id})`);
-                            await github.rest.repos.deleteReleaseAsset({
-                              owner: context.repo.owner,
-                              repo: context.repo.repo,
-                              asset_id: asset.id
-                            });
-                            console.log(`Deleted EXE asset: ${asset.name}`);
-                          }
-                          
-                        } catch (error) {
-                          console.error(`Error handling assets: ${error.message}`);
-                          console.error(error.stack);
-                        }
-                      } else {
-                        console.log('Release ID not found, skipping asset deletion');
-                      }
+    - name: Delete existing asset if it exists
+      if: github.ref == 'refs/heads/main'
+      uses: actions/github-script@v7
+      continue-on-error: true
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
+          const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
+          const releaseId = '${{ steps.check_release.outputs.release_id }}';
 
-            - name: Upload ZIP asset to release
-              if: github.ref == 'refs/heads/main'
-              uses: actions/github-script@v7
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  script: |
-                      const fs = require('fs');
-                      const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
-                      const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
-                      const releaseId = '${{ steps.check_release.outputs.release_id }}';
+          if (releaseId) {
+            try {
+              // List all assets for the release
+              const assets = await github.rest.repos.listReleaseAssets({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId
+              });
+              
+              console.log(`Found ${assets.data.length} assets on the release:`);
+              assets.data.forEach(asset => {
+                console.log(`- ${asset.name} (ID: ${asset.id})`);
+              });
+              
+              // 1. Delete the compressed file if it exists
+              const zipAsset = assets.data.find(asset => asset.name === config.compressed);
+              if (zipAsset) {
+                console.log(`Found existing ZIP asset: ${zipAsset.name} (ID: ${zipAsset.id})`);
+                await github.rest.repos.deleteReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  asset_id: zipAsset.id
+                });
+                console.log(`Deleted ZIP asset: ${zipAsset.name}`);
+              }
+              
+              // 2. Delete any .exe files (we don't want them in the release)
+              const exeAssets = assets.data.filter(asset => asset.name.endsWith('.exe'));
+              for (const asset of exeAssets) {
+                console.log(`Found EXE asset to delete: ${asset.name} (ID: ${asset.id})`);
+                await github.rest.repos.deleteReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  asset_id: asset.id
+                });
+                console.log(`Deleted EXE asset: ${asset.name}`);
+              }
+              
+            } catch (error) {
+              console.error(`Error handling assets: ${error.message}`);
+              console.error(error.stack);
+            }
+          } else {
+            console.log('Release ID not found, skipping asset deletion');
+          }
 
-                      if (releaseId) {
-                        try {
-                          // Only upload the ZIP file with its correct name
-                          console.log(`Uploading ZIP file: ${config.compressed}`);
-                          await github.rest.repos.uploadReleaseAsset({
-                            owner: context.repo.owner,
-                            repo: context.repo.repo,
-                            release_id: releaseId,
-                            name: config.compressed,
-                            data: fs.readFileSync(config.compressed),
-                            headers: {
-                              'Content-Type': 'application/zip'
-                            }
-                          });
-                          console.log(`Successfully uploaded ${config.compressed}`);
-                        } catch (error) {
-                          console.error(`Error uploading asset: ${error.message}`);
-                          throw error;
-                        }
-                      } else {
-                        console.error("No release ID found. Cannot upload asset.");
-                      }
+    - name: Upload ZIP asset to release
+      if: github.ref == 'refs/heads/main'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
+          const config = getBinaryConfig(context.payload.inputs.binary_type, context.payload.inputs.version);
+          const releaseId = '${{ steps.check_release.outputs.release_id }}';
 
-            - name: Update release description
-              if: github.ref == 'refs/heads/main'
-              uses: actions/github-script@v7
-              with:
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  script: |
-                      const { generateEnhancedReleaseDescription } = require('./.github/workflows/scripts/release-utils.js');
-                      const releaseId = '${{ steps.check_release.outputs.release_id }}';
-                      
-                      if (releaseId) {
-                        try {
-                          // Get current assets in the release
-                          const { data: assets } = await github.rest.repos.listReleaseAssets({
-                            owner: context.repo.owner,
-                            repo: context.repo.repo,
-                            release_id: releaseId
-                          });
-                          
-                          // Generate enhanced description using external function
-                          const releaseBody = generateEnhancedReleaseDescription(assets);
-                          
-                          // Update the release
-                          await github.rest.repos.updateRelease({
-                            owner: context.repo.owner,
-                            repo: context.repo.repo,
-                            release_id: releaseId,
-                            body: releaseBody
-                          });
-                          
-                          console.log('Updated release description with enhanced formatting');
-                        } catch (error) {
-                          console.error(`Error updating release description: ${error.message}`);
-                        }
-                      } else {
-                        console.log('No release ID found, skipping description update');
-                      }
+          if (releaseId) {
+            try {
+              // Only upload the ZIP file with its correct name
+              console.log(`Uploading ZIP file: ${config.compressed}`);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                name: config.compressed,
+                data: fs.readFileSync(config.compressed),
+                headers: {
+                  'Content-Type': 'application/zip'
+                }
+              });
+              console.log(`Successfully uploaded ${config.compressed}`);
+            } catch (error) {
+              console.error(`Error uploading asset: ${error.message}`);
+              throw error;
+            }
+          } else {
+            console.error("No release ID found. Cannot upload asset.");
+          }
+
+    - name: Update release description
+      if: github.ref == 'refs/heads/main'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const { generateEnhancedReleaseDescription } = require('./.github/workflows/scripts/release-utils.js');
+          const releaseId = '${{ steps.check_release.outputs.release_id }}';
+
+          if (releaseId) {
+            try {
+              // Get current assets in the release
+              const { data: assets } = await github.rest.repos.listReleaseAssets({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId
+              });
+              
+              // Generate enhanced description using external function
+              const releaseBody = generateEnhancedReleaseDescription(assets);
+              
+              // Update the release
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                body: releaseBody
+              });
+              
+              console.log('Updated release description with enhanced formatting');
+            } catch (error) {
+              console.error(`Error updating release description: ${error.message}`);
+            }
+          } else {
+            console.log('No release ID found, skipping description update');
+          }
