@@ -5,6 +5,12 @@ binaries:
         filename_template: "bazel_nojdk-{clean_version}-windows-x86_64.exe"
         compressed_name_template: "bazel_nojdk-{clean_version}-windows-x86_64.zip"
 
+    bazelisk:
+        title: "Bazelisk"
+        url_template: "https://github.com/bazelbuild/bazelisk/releases/download/{version}/bazelisk-windows-amd64.exe"
+        filename_template: "bazelisk-windows-amd64.exe"
+        compressed_name_template: "bazelisk-{clean_version}-windows-amd64.zip"
+
     copy_directory:
         title: "bazel-lib: Copy Directory"
         url_template: https://github.com/bazel-contrib/bazel-lib/releases/download/{version}/copy_directory-windows_amd64.exe
