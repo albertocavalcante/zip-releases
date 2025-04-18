@@ -10,6 +10,8 @@ on:
         options:
         - bazel_nojdk
         - bazelisk
+        - buildifier
+        - buildozer
         - copy_directory
       version:
         description: "Version to mirror (e.g., 8.1.1 or v2.14.0)"
