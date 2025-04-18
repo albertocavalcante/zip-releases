@@ -11,6 +11,18 @@ binaries:
         filename_template: "bazelisk-windows-amd64.exe"
         compressed_name_template: "bazelisk-{clean_version}-windows-amd64.zip"
 
+    buildifier:
+        title: "Buildifier"
+        url_template: "https://github.com/bazelbuild/buildtools/releases/download/{version}/buildifier-windows-amd64.exe"
+        filename_template: "buildifier-windows-amd64.exe"
+        compressed_name_template: "buildifier-{clean_version}-windows-amd64.zip"
+
+    buildozer:
+        title: "Buildozer"
+        url_template: "https://github.com/bazelbuild/buildtools/releases/download/{version}/buildozer-windows-amd64.exe"
+        filename_template: "buildozer-windows-amd64.exe"
+        compressed_name_template: "buildozer-{clean_version}-windows-amd64.zip"
+
     copy_directory:
         title: "bazel-lib: Copy Directory"
         url_template: https://github.com/bazel-contrib/bazel-lib/releases/download/{version}/copy_directory-windows_amd64.exe
