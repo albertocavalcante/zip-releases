@@ -45,7 +45,7 @@ jobs:
       contents: write
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Install dependencies
       run: npm install js-yaml
@@ -122,8 +122,8 @@ jobs:
         echo "This is expected behavior for non-main branches"
 
     - name: Create release if it doesn't exist
-      if: github.ref == 'refs/heads/main' && steps.check_release.outputs.release_exists !=
-        'true'
+      if: github.ref == 'refs/heads/main' && steps.check_release.outputs.release_exists 
+        != 'true'
       id: create_release
       uses: actions/github-script@v7
       with:
