@@ -122,8 +122,8 @@ jobs:
         echo "This is expected behavior for non-main branches"
 
     - name: Create release if it doesn't exist
-      if: github.ref == 'refs/heads/main' && steps.check_release.outputs.release_exists !=
-        'true'
+      if: github.ref == 'refs/heads/main' && steps.check_release.outputs.release_exists 
+        != 'true'
       id: create_release
       uses: actions/github-script@v7
       with:
