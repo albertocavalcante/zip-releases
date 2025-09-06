@@ -52,7 +52,7 @@ jobs:
 
     - name: Set binary config
       id: config
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         script: |
           const { getBinaryConfig } = require('./.github/workflows/scripts/release-utils.js');
@@ -71,7 +71,7 @@ jobs:
     - name: Check for existing release and update
       if: github.ref == 'refs/heads/main'
       id: check_release
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
@@ -125,7 +125,7 @@ jobs:
       if: github.ref == 'refs/heads/main' && steps.check_release.outputs.release_exists !=
         'true'
       id: create_release
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
@@ -166,7 +166,7 @@ jobs:
 
     - name: Delete existing asset if it exists
       if: github.ref == 'refs/heads/main'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       continue-on-error: true
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -223,7 +223,7 @@ jobs:
 
     - name: Upload ZIP asset to release
       if: github.ref == 'refs/heads/main'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
@@ -257,7 +257,7 @@ jobs:
 
     - name: Update release description
       if: github.ref == 'refs/heads/main'
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
